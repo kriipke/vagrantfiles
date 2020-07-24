@@ -13,17 +13,18 @@
 # => https://www.dokuwiki.org/security
 
 $script = <<-SCRIPT
-apk add nginx php7 php7-gd php7-fpm php7-xml php7-session php7-json \
-	&& mkdir -p /var/www/localhost/htdocs/dokuwiki \
-	&& cd /var/www/localhost/htdocs/dokuwiki \
+apk update \
+	&& apk add nginx php7 php7-gd php7-fpm php7-xml php7-session php7-json \
+	&& sed -i \
+		-e 's/^;\?\s*user\s*=.*/user = nginx/' \
+		-e 's/^;\?\s*group\s*=.*/group = nginx/' \
+		-e 's/^;\?\s*listen\s*=.*/listen = \/var\/run\/php-fpm7\/php.sock/' \
+		-e 's/^;\?\s*listen\.owner\s*=.*/listen.owner = nginx/' \
+		-e 's/^;\?\s*listen\.group\s*=.*/listen.group = nginx/' \
+		-e 's/^;\?\s*listen\.mode\s*=.*/listen.mode = 0600/' \
+		/etc/php7/php-fpm.d/www.conf \
 	&& rc-update add php-fpm7 \
 	&& rc-update add nginx \
-	&& sed -i 's/^;\?\s*user\s*=.*/user = nginx/' /etc/php7/php-fpm.d/www.conf \
-	&& sed -i 's/^;\?\s*group\s*=.*/group = nginx/' /etc/php7/php-fpm.d/www.conf \
-	&& sed -i 's/^;\?\s*listen\s*=.*/listen = \/var\/run\/php-fpm7\/php.sock/' /etc/php7/php-fpm.d/www.conf \
-	&& sed -i 's/^;\?\s*listen\.owner\s*=.*/listen.owner = nginx/' /etc/php7/php-fpm.d/www.conf \
-	&& sed -i 's/^;\?\s*listen\.group\s*=.*/listen.group = nginx/' /etc/php7/php-fpm.d/www.conf \
-	&& sed -i 's/^;\?\s*listen\.mode\s*=.*/listen.mode = 0600/' /etc/php7/php-fpm.d/www.conf \
 	&& cat > /etc/nginx/conf.d/dokuwiki.conf <<'EOF'
 server {
 	listen 80 default_server;
@@ -55,18 +56,17 @@ server {
 EOF
 
 cd /var/www/localhost/htdocs \
-	&& get https://download.dokuwiki.org/src/dokuwiki/dokuwiki-rc.tgz \
-	&& tar zxvf dokuwiki-*.tgz \
-	&& rm dokuwiki-*.tgz \
-	&& mv dokuwiki*/ dokuwiki/ \
-	&& chown -R nginx:nginx dokuwiki \
-	&& chmod -R 700 dokuwiki/
+	&& wget -O dokuwiki.tgz https://download.dokuwiki.org/src/dokuwiki/dokuwiki-rc.tgz \
+	&& tar zxvf dokuwiki.tgz \
+	&& rm dokuwiki.tgz \
+	&& mv dokuwiki*/ dokuwiki
 
 cd /var/www/localhost/htdocs/dokuwiki/lib/tpl \
-	&& wget https://github.com/LotarProject/dokuwiki-template-bootstrap3/tarball/master \
-	&& tar zxvf *bootstrap3*tar.gz \
-	&& rm *boostrap3*tar.gz \
-	&& cat > /var/www/localhost/htdocs/dokuwiki/conf/local.php <<'EOF'
+	&& wget -O bs3-template.tar https://github.com/LotarProject/dokuwiki-template-bootstrap3/tarball/master \
+	&& tar xvf bs3-template.tar \
+	&& rm bs3-template.tar \
+	&& mv *dokuwiki-template*/ bootstrap3 \
+	&& cat > ../../conf/local.php <<'EOF'
 $conf['template'] = 'bootstrap3'
 EOF
 
@@ -76,8 +76,7 @@ SCRIPT
 
 Vagrant.configure("2") do |config|
   config.vm.box = "generic/alpine38"
-  config.vm.provision, inline: $script
-  config.vm.synced_folder "pages/", "/var/www/localhost/htdocs/dokuwiki/data/pages",
-    owner: "nginx", group: "nginx"
-  config.vm.network "forwarded_port", guest: 80, host:8080
+  config.vm.provision "shell", inline: $script
+  #config.vm.synced_folder "pages/", "/var/www/localhost/htdocs/dokuwiki/data/pages", owner: "nginx", group: "nginx"
+  config.vm.network "forwarded_port", guest: 80, host:8081
 end
