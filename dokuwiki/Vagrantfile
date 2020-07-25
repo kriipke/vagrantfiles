@@ -24,8 +24,10 @@ apk update \
 		-e 's/^;\?\s*listen\.mode\s*=.*/listen.mode = 0600/' \
 		/etc/php7/php-fpm.d/www.conf \
 	&& rc-update add php-fpm7 \
-	&& rc-update add nginx \
-	&& cat > /etc/nginx/conf.d/dokuwiki.conf <<'EOF'
+	&& rc-update add nginx
+
+rm /etc/nginx/conf.d/default.conf
+cat > /etc/nginx/conf.d/dokuwiki.conf <<'EOF'
 server {
 	listen 80 default_server;
 	listen [::]:80 default_server;
@@ -53,6 +55,7 @@ server {
 		fastcgi_param REDIRECT_STATUS 200;
 		fastcgi_pass unix:/var/run/php-fpm7/php.sock;
 	}
+}
 EOF
 
 cd /var/www/localhost/htdocs \
@@ -67,16 +70,21 @@ cd /var/www/localhost/htdocs/dokuwiki/lib/tpl \
 	&& rm bs3-template.tar \
 	&& mv *dokuwiki-template*/ bootstrap3 \
 	&& cat > ../../conf/local.php <<'EOF'
+<?php
+
 $conf['template'] = 'bootstrap3'
 EOF
 
 chown -R nginx:nginx /var/www/localhost/htdocs/dokuwiki \
-	&& chmod -R 700 /var/www/localhost/htdocs/dokuwiki
+	&& chmod -R 700 /var/www/localhost/htdocs/dokuwiki \
+	&& service php-fpm7 start \
+	&& service nginx start
 SCRIPT
 
 Vagrant.configure("2") do |config|
   config.vm.box = "generic/alpine38"
   config.vm.provision "shell", inline: $script
+  config.vm.provision "file", source: "dokuwiki-nginx.conf", destination: "/etc/nginx/conf.d/dokuwiki.conf"
   #config.vm.synced_folder "pages/", "/var/www/localhost/htdocs/dokuwiki/data/pages", owner: "nginx", group: "nginx"
-  config.vm.network "forwarded_port", guest: 80, host:8081
+  config.vm.network "forwarded_port", guest: 80, host:8080
 end
